@@ -21,6 +21,11 @@ interface SlackEventPayload {
 }
 
 export async function POST(request: NextRequest) {
+  // Slackのリトライは無視
+  if (request.headers.get('x-slack-retry-num')) {
+    return NextResponse.json({ ok: true });
+  }
+
   try {
     // リクエストボディを取得
     const body = await request.text();
@@ -40,12 +45,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // メンション or ダイレクトメッセージに応答
-      if (
-        (event.type === 'app_mention' || event.type === 'message') &&
-        event.text &&
-        event.channel
-      ) {
+      // メンションにのみ応答（app_mention）
+      if (event.type === 'app_mention' && event.text && event.channel) {
         // シンプルな固定メッセージで返信
         await slack.chat.postMessage({
           channel: event.channel,
