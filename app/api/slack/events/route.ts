@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WebClient } from '@slack/web-api';
 import { verifySlackRequest } from '@/lib/slack-verification';
-import { generateResponse } from '@/lib/openai-client';
+import { generateResponse } from '@/lib/gemini-client';
 import { maskPersonalInfo, unmaskPersonalInfo } from '@/lib/pi-masking';
 import { searchNotionPages } from '@/lib/notion-client';
 
