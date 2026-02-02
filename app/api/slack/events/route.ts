@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WebClient } from '@slack/web-api';
+import { generateResponse } from '@/lib/openai-client';
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
@@ -47,10 +48,19 @@ export async function POST(request: NextRequest) {
 
       // メンションにのみ応答（app_mention）
       if (event.type === 'app_mention' && event.text && event.channel) {
-        // シンプルな固定メッセージで返信
+        // メンション部分を削除
+        const userMessage = event.text.replace(/<@[A-Z0-9]+>/g, '').trim();
+
+        // OpenAI APIで応答を生成
+        const aiResponse = await generateResponse(
+          userMessage,
+          'あなたは親切なアシスタントです。簡潔に回答してください。'
+        );
+
+        // Slackに返信
         await slack.chat.postMessage({
           channel: event.channel,
-          text: `こんにちは！メッセージを受け取りました: "${event.text.replace(/<@[A-Z0-9]+>/g, '').trim()}"`,
+          text: aiResponse,
           thread_ts: event.thread_ts || event.ts,
         });
       }
