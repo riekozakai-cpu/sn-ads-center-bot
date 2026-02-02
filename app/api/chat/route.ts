@@ -42,9 +42,12 @@ const searchArticlesTool = tool({
 複数回の異なるキーワード試行を通じて、ユーザーの質問に最も関連する記事を見つけてください。`,
   parameters: z.object({
     query: z.string().describe('検索キーワード(例: "ターゲティング", "ログイン")'),
-    limit: z.number().default(5).describe('取得記事数(デフォルト: 5)')
+    limit: z.number().optional().describe('取得記事数(デフォルト: 5)')
   }),
-  execute: async ({ query, limit }) => {
+  // @ts-ignore - zod v4 compatibility issue
+  execute: async (params) => {
+    const query = params.query;
+    const limit = params.limit ?? 5;
     try {
       console.log(`🔍 記事検索中: "${query}" (上限: ${limit}件)`);
       const encodedQuery = encodeURIComponent(query);
@@ -214,7 +217,6 @@ export async function POST(request: NextRequest) {
       tools: {
         searchArticles: searchArticlesTool,
       },
-      maxSteps: 5, // ツールを複数回呼び出し可能
     });
 
     return NextResponse.json({ content: text });
