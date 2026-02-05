@@ -114,8 +114,8 @@ export async function POST(request: NextRequest) {
         try {
           const notionResults = await searchNotionPages(userMessage, 3);
           if (notionResults.length > 0) {
-            context += '\n\n【参考情報（Notion - 社内限定）】\n※以下のURLは社内Notionワークスペースのメンバーのみアクセス可能です\n' + notionResults.map((page, i) =>
-              `${i + 1}. ${page.title}\nURL: ${page.url}（社内限定）\n内容: ${page.content.slice(0, 800)}...`
+            context += '\n\n【参考情報 - Notion社内ページ】\n※URLは社内メンバーのみアクセス可能\n' + notionResults.map((page, i) =>
+              `${i + 1}. ${page.title}\nURL: ${page.url}\n内容: ${page.content.slice(0, 800)}...`
             ).join('\n\n');
           }
         } catch (error) {
