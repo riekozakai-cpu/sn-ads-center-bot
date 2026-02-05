@@ -16,7 +16,11 @@ function loadEnv() {
       const trimmed = line.trim();
       if (trimmed && !trimmed.startsWith('#')) {
         const [key, ...valueParts] = trimmed.split('=');
-        const value = valueParts.join('=');
+        let value = valueParts.join('=');
+        // ダブルクォートを除去
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1);
+        }
         if (key && value) {
           process.env[key] = value;
         }
