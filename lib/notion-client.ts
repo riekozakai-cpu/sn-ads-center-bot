@@ -67,12 +67,17 @@ export async function searchNotionPages(
       });
     }
 
-    // クエリとの関連性でスコアリングして並び替え
+    // クエリとの関連性でスコアリングして並び替え（スコア0でも除外しない）
     const scored = results.map(result => {
       const titleLower = result.title.toLowerCase();
       const contentLower = result.content.toLowerCase();
       let score = 0;
 
+      // クエリ全体でマッチするかチェック
+      if (titleLower.includes(queryLower)) score += 20;
+      if (contentLower.includes(queryLower)) score += 5;
+
+      // 個別の単語でもチェック
       for (const word of queryWords) {
         if (titleLower.includes(word)) score += 10;
         if (contentLower.includes(word)) score += 1;
@@ -81,9 +86,8 @@ export async function searchNotionPages(
       return { result, score };
     });
 
-    // スコア順にソートして上位を返す
+    // スコア順にソートして上位を返す（Notion APIが返した結果は全て含める）
     return scored
-      .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, maxResults)
       .map(({ result }) => result);
