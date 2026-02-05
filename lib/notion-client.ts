@@ -28,20 +28,19 @@ export async function searchNotionPages(
   maxResults: number = 5
 ): Promise<NotionSearchResult[]> {
   try {
+    // より多くの候補を取得してから絞り込む
     const response = await notion.search({
       query: query,
       filter: {
         property: 'object',
         value: 'page',
       },
-      sort: {
-        direction: 'descending',
-        timestamp: 'last_edited_time',
-      },
-      page_size: maxResults,
+      page_size: Math.min(maxResults * 3, 20), // 候補を多めに取得
     });
 
     const results: NotionSearchResult[] = [];
+    const queryLower = query.toLowerCase();
+    const queryWords = queryLower.split(/\s+/).filter(w => w.length > 1);
 
     for (const page of response.results) {
       if (page.object !== 'page') continue;
@@ -68,7 +67,26 @@ export async function searchNotionPages(
       });
     }
 
-    return results;
+    // クエリとの関連性でスコアリングして並び替え
+    const scored = results.map(result => {
+      const titleLower = result.title.toLowerCase();
+      const contentLower = result.content.toLowerCase();
+      let score = 0;
+
+      for (const word of queryWords) {
+        if (titleLower.includes(word)) score += 10;
+        if (contentLower.includes(word)) score += 1;
+      }
+
+      return { result, score };
+    });
+
+    // スコア順にソートして上位を返す
+    return scored
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxResults)
+      .map(({ result }) => result);
   } catch (error) {
     console.error('Notion search error:', error);
     throw error;
@@ -101,7 +119,7 @@ async function getPageContent(pageId: string): Promise<string> {
   try {
     const blocks = await notion.blocks.children.list({
       block_id: pageId,
-      page_size: 50, // 最初の50ブロックを取得
+      page_size: 100, // より多くのブロックを取得
     });
 
     const textParts: string[] = [];
@@ -111,11 +129,30 @@ async function getPageContent(pageId: string): Promise<string> {
       if (text) {
         textParts.push(text);
       }
+
+      // 子ブロックがある場合は再帰的に取得（1階層のみ）
+      const blockAny = block as any;
+      if (blockAny.has_children && textParts.join('\n').length < 1500) {
+        try {
+          const childBlocks = await notion.blocks.children.list({
+            block_id: block.id,
+            page_size: 20,
+          });
+          for (const childBlock of childBlocks.results) {
+            const childText = extractTextFromBlock(childBlock);
+            if (childText) {
+              textParts.push('  ' + childText);
+            }
+          }
+        } catch {
+          // 子ブロック取得に失敗しても続行
+        }
+      }
     }
 
-    // 最大2000文字に制限
+    // 最大2500文字に制限
     const content = textParts.join('\n');
-    return content.slice(0, 2000);
+    return content.slice(0, 2500);
   } catch (error) {
     console.error(`Failed to get content for page ${pageId}:`, error);
     return '';
@@ -131,11 +168,21 @@ function extractTextFromBlock(block: any): string {
 
   if (!blockData) return '';
 
-  // rich_textを持つブロックタイプ
+  // rich_textを持つブロックタイプ（paragraph, heading, list items, etc.）
   if (blockData.rich_text) {
-    return blockData.rich_text
+    const text = blockData.rich_text
       .map((rt: any) => rt.plain_text)
       .join('');
+
+    // 見出しの場合はマーカーを付ける
+    if (blockType.startsWith('heading_')) {
+      return `【${text}】`;
+    }
+    // リストの場合
+    if (blockType === 'bulleted_list_item' || blockType === 'numbered_list_item') {
+      return `• ${text}`;
+    }
+    return text;
   }
 
   // テーブルセルなど特殊なケース
@@ -145,6 +192,16 @@ function extractTextFromBlock(block: any): string {
         cell.map((rt: any) => rt.plain_text).join('')
       )
       .join(' | ');
+  }
+
+  // コードブロック
+  if (blockType === 'code' && blockData.rich_text) {
+    return blockData.rich_text.map((rt: any) => rt.plain_text).join('');
+  }
+
+  // Callout、Quote
+  if ((blockType === 'callout' || blockType === 'quote') && blockData.rich_text) {
+    return blockData.rich_text.map((rt: any) => rt.plain_text).join('');
   }
 
   return '';

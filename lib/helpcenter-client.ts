@@ -13,6 +13,7 @@ export interface HelpCenterSearchResult {
   excerpt: string;
   source: 'HelpCenter';
   type: 'public';
+  postType?: 'posts' | 'news' | 'faq';
 }
 
 interface WPPost {

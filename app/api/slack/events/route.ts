@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { WebClient } from '@slack/web-api';
 import { generateResponse } from '@/lib/gemini-client';
 import { searchNotionPages } from '@/lib/notion-client';
-import { searchHelpCenter } from '@/lib/helpcenter-client';
+import { searchCachedHelpCenter } from '@/lib/helpcenter-cache';
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
 
         // ヘルプセンター検索（公開情報）
         try {
-          const helpResults = await searchHelpCenter(userMessage, 3);
+          const helpResults = await searchCachedHelpCenter(userMessage, 3);
           if (helpResults.length > 0) {
             context += '\n\n【参考情報（ヘルプセンター）】\n' + helpResults.map((article, i) =>
               `${i + 1}. ${article.title}\nURL: ${article.url}\n内容: ${article.content.slice(0, 500)}...`
@@ -114,8 +114,8 @@ export async function POST(request: NextRequest) {
         try {
           const notionResults = await searchNotionPages(userMessage, 3);
           if (notionResults.length > 0) {
-            context += '\n\n【参考情報（Notion - 社内）】\n' + notionResults.map((page, i) =>
-              `${i + 1}. ${page.title}\nURL: ${page.url}\n内容: ${page.content.slice(0, 500)}...`
+            context += '\n\n【参考情報（Notion - 社内限定）】\n※以下のURLは社内Notionワークスペースのメンバーのみアクセス可能です\n' + notionResults.map((page, i) =>
+              `${i + 1}. ${page.title}\nURL: ${page.url}（社内限定）\n内容: ${page.content.slice(0, 800)}...`
             ).join('\n\n');
           }
         } catch (error) {
