@@ -151,8 +151,13 @@ export async function POST(request: NextRequest) {
           console.error('Zendesk search error:', error);
         }
 
+        // 古いZendesk形式のURLを除去
+        const cleanedContext = context
+          .replace(/https?:\/\/help-ads\.smartnews\.com\/(?:hc\/)?ja\/articles\/[^\s)」』\]"]*/g, '[無効なURL - 削除済み]')
+          .replace(/https?:\/\/help-ads\.smartnews\.com\/hc\/[^\s)」』\]"]*/g, '[無効なURL - 削除済み]');
+
         // AI応答を生成
-        const prompt = userMessage + context;
+        const prompt = userMessage + cleanedContext;
         const aiResponse = await generateResponse(prompt, SYSTEM_PROMPT);
 
         // Slackに返信
