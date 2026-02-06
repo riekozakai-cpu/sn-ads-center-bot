@@ -164,7 +164,9 @@ export async function searchHelpCenter(
 
     const validArticles = validityChecks
       .filter(({ isValid }) => isValid)
-      .map(({ article }) => article);
+      .map(({ article }) => article)
+      // 古いZendesk形式のURL（/ja/articles/）を除外
+      .filter(article => !article.url.includes('/ja/articles/') && !article.url.includes('/hc/'));
 
     const invalidCount = uniqueArticles.length - validArticles.length;
     if (invalidCount > 0) {
