@@ -42,7 +42,8 @@ function stripHtml(html: string): string {
 }
 
 /**
- * URLの有効性をチェック（HEADリクエストで404などを検出）
+ * URLの有効性をチェック（リダイレクトを検出）
+ * 削除された記事はトップページにリダイレクトされるため、それを検出する
  */
 async function isUrlValid(url: string): Promise<boolean> {
   try {
@@ -52,10 +53,27 @@ async function isUrlValid(url: string): Promise<boolean> {
     const response = await fetch(url, {
       method: 'HEAD',
       signal: controller.signal,
+      redirect: 'manual', // リダイレクトをフォローしない
     });
 
     clearTimeout(timeoutId);
-    return response.ok;
+
+    // 200系なら有効
+    if (response.ok) {
+      return true;
+    }
+
+    // 301/302リダイレクトの場合、リダイレクト先を確認
+    if (response.status === 301 || response.status === 302) {
+      const location = response.headers.get('location');
+      // トップページへのリダイレクトは無効とみなす
+      if (location === 'https://help-ads.smartnews.com/' || location === HELPCENTER_BASE_URL + '/') {
+        console.log(`⚠️ トップページへリダイレクト（削除された記事）: ${url}`);
+        return false;
+      }
+    }
+
+    return false;
   } catch (error) {
     console.warn(`URL有効性チェック失敗: ${url}`);
     return false;
