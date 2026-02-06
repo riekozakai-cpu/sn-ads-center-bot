@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WebClient } from '@slack/web-api';
-import { generateResponse } from '@/lib/gemini-client';
+import { generateResponse, extractSearchKeywords } from '@/lib/gemini-client';
 import { searchNotionPages } from '@/lib/notion-client';
 import { searchHelpCenter } from '@/lib/helpcenter-client';
 import { searchZendeskTickets } from '@/lib/zendesk-client';
@@ -138,12 +138,15 @@ export async function POST(request: NextRequest) {
         // メンション部分を削除
         const userMessage = event.text.replace(/<@[A-Z0-9]+>/g, '').trim();
 
+        // 質問文から検索キーワードを抽出
+        const searchKeywords = await extractSearchKeywords(userMessage);
+
         // Notionとヘルプセンターから関連情報を検索
         let context = '';
 
         // ヘルプセンター検索（公開情報）
         try {
-          const helpResults = await searchHelpCenter(userMessage, 3);
+          const helpResults = await searchHelpCenter(searchKeywords, 3);
           if (helpResults.length > 0) {
             context += '\n\n【参考情報（ヘルプセンター）】\n' + helpResults.map((article, i) =>
               `${i + 1}. ${article.title}\nURL: ${article.url}\n内容: ${article.content.slice(0, 500)}...`

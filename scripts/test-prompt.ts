@@ -2,7 +2,7 @@
  * プロンプト動作確認用テストスクリプト
  * 使い方: npx tsx scripts/test-prompt.ts
  */
-import { generateResponse } from '../lib/gemini-client';
+import { generateResponse, extractSearchKeywords } from '../lib/gemini-client';
 import { searchHelpCenter } from '../lib/helpcenter-client';
 
 // route.ts と同じシステムプロンプトを読み込むため、直接定義
@@ -108,7 +108,9 @@ async function runTests() {
 
     if (tc.useSearch) {
       try {
-        const helpResults = await searchHelpCenter(tc.query, 3);
+        const keywords = await extractSearchKeywords(tc.query);
+        console.log(`🔑 抽出キーワード: "${keywords}"`);
+        const helpResults = await searchHelpCenter(keywords, 3);
         if (helpResults.length > 0) {
           context = '\n\n【参考情報（ヘルプセンター）】\n' + helpResults.map((article, i) =>
             `${i + 1}. ${article.title}\nURL: ${article.url}\n内容: ${article.content.slice(0, 500)}...`
