@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { WebClient } from '@slack/web-api';
 import { generateResponse } from '@/lib/gemini-client';
 import { searchNotionPages } from '@/lib/notion-client';
-import { searchCachedHelpCenter } from '@/lib/helpcenter-cache';
+import { searchHelpCenter } from '@/lib/helpcenter-client';
 import { searchZendeskTickets } from '@/lib/zendesk-client';
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
         // ヘルプセンター検索（公開情報）
         try {
-          const helpResults = await searchCachedHelpCenter(userMessage, 3);
+          const helpResults = await searchHelpCenter(userMessage, 3);
           if (helpResults.length > 0) {
             context += '\n\n【参考情報（ヘルプセンター）】\n' + helpResults.map((article, i) =>
               `${i + 1}. ${article.title}\nURL: ${article.url}\n内容: ${article.content.slice(0, 500)}...`
