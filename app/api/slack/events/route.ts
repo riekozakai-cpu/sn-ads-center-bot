@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WebClient } from '@slack/web-api';
 import { generateResponse } from '@/lib/gemini-client';
+import { searchNotionPages } from '@/lib/notion-client';
 import { searchHelpCenter } from '@/lib/helpcenter-client';
-// TODO: 次のステップで有効化
-// import { searchNotionPages } from '@/lib/notion-client';
-// import { searchZendeskTickets } from '@/lib/zendesk-client';
+import { searchZendeskTickets } from '@/lib/zendesk-client';
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
@@ -33,10 +32,11 @@ const SYSTEM_PROMPT = `あなたは SmartNewsAds の広告配信に関する「�
 - SmartNewsAds の広告配信/運用/入稿/計測/審査/請求/アカウントに関する質問。
 - ログイン系の問い合わせは「社外対応テンプレ」に準拠して回答する。
 
-# 情報源
-- 公開ヘルプセンター（help-ads.smartnews.com）の記事のみを使用する。
-- 参考情報として提供された記事の内容をしっかり読み込み、要約して回答する。
-- URLは参考情報に含まれるものをそのまま使用する。自分でURLを生成しない。
+# 情報源と優先順位
+1) 社外向け情報：help-ads.smartnews.com（公開ヘルプ）を最優先で参照し、該当URLを必ず提示。
+2) 社内向け情報：Notion/FAQシート/過去問合せログは、オペレーター向け補足として使用。
+3) 過去の問い合わせ：Zendeskの過去チケットは、類似の問い合わせ対応例として参考にする。
+- 社内情報を使った場合は【社外向け情報】【社内向け情報】【過去の問い合わせ例】を分けて併記する。
 
 # 禁止事項
 - 根拠がない推測回答は禁止。根拠（文書名/見出し/URL）を最低1つは必ず示す。
@@ -56,16 +56,27 @@ const SYSTEM_PROMPT = `あなたは SmartNewsAds の広告配信に関する「�
 - 出力は必ず次の形式：
 
 【結論】
-（質問への回答を2〜3文でわかりやすく記載）
+（質問への回答を2〜3文でわかりやすく記載。箇条書きより文章で説明する）
 
-【参考記事】
-- 記事タイトル：{タイトル}
-- 要点：（記事の内容を読んで、質問に関連する部分を要約）
-- URL: {参考情報に含まれるURL}
+【社外向け情報】(公開)
+- 要点：
+- 根拠：{記事タイトル}
+- URL: {URL}
 
-【確認したいこと】（該当する記事が見つからない場合のみ）
+【社内向け情報】(社内)
+- 運用メモ：
+- 参照：{Notionページ名}
+- URL: {NotionのURL}
+
+【過去の問い合わせ例】(社内)
+- 類似事例：{チケットの件名}
+- 対応内容：
+- URL: {ZendeskチケットURL}
+
+【確認したいこと】（根拠不足のときのみ）
 - 質問1：
 - 質問2：
+- 質問3：
 
 # PremiumAds
 - 問い合わせに PremiumAds と明記がある場合：Premium固有の根拠が見つからなければ
@@ -116,11 +127,37 @@ export async function POST(request: NextRequest) {
           console.error('Help Center search error:', error);
         }
 
-        // TODO: 次のステップでZendeskとNotionを有効化
-        // 現在はヘルプセンター（公開情報）のみを使用
+        // Notion検索（社内情報）
+        try {
+          const notionResults = await searchNotionPages(userMessage, 3);
+          if (notionResults.length > 0) {
+            context += '\n\n【参考情報 - Notion社内ページ】\n※URLは社内メンバーのみアクセス可能\n' + notionResults.map((page, i) =>
+              `${i + 1}. ${page.title}\nURL: ${page.url}\n内容: ${page.content.slice(0, 800)}...`
+            ).join('\n\n');
+          }
+        } catch (error) {
+          console.error('Notion search error:', error);
+        }
+
+        // Zendesk検索（過去の問い合わせ）
+        try {
+          const zendeskResults = await searchZendeskTickets(userMessage, 3);
+          if (zendeskResults.length > 0) {
+            context += '\n\n【参考情報 - 過去の問い合わせ（Zendesk）】\n※社内メンバーのみアクセス可能\n' + zendeskResults.map((ticket, i) =>
+              `${i + 1}. [${ticket.status}] ${ticket.subject}\n日付: ${ticket.createdAt}\nURL: ${ticket.url}\n内容: ${ticket.description.slice(0, 500)}...`
+            ).join('\n\n');
+          }
+        } catch (error) {
+          console.error('Zendesk search error:', error);
+        }
+
+        // 古いZendesk形式のURLを除去
+        const cleanedContext = context
+          .replace(/https?:\/\/help-ads\.smartnews\.com\/(?:hc\/)?ja\/articles\/[^\s)」』\]"]*/g, '[無効なURL - 削除済み]')
+          .replace(/https?:\/\/help-ads\.smartnews\.com\/hc\/[^\s)」』\]"]*/g, '[無効なURL - 削除済み]');
 
         // AI応答を生成
-        const prompt = userMessage + context;
+        const prompt = userMessage + cleanedContext;
         const aiResponse = await generateResponse(prompt, SYSTEM_PROMPT);
 
         // Slackに返信
