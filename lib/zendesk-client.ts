@@ -34,6 +34,17 @@ const ZENDESK_SUBDOMAIN = 'smartnews-ads';
 const ZENDESK_API_BASE = `https://${ZENDESK_SUBDOMAIN}.zendesk.com/api/v2`;
 
 /**
+ * 古いZendesk形式のURLを除去する
+ * /ja/articles/ や /hc/ja/articles/ 形式のURLは無効なため除去
+ */
+function removeOldZendeskUrls(text: string): string {
+  // 古いZendesk形式のURLパターンを除去
+  return text
+    .replace(/https?:\/\/help-ads\.smartnews\.com\/(?:hc\/)?ja\/articles\/\d+[^\s]*/g, '[リンク削除]')
+    .replace(/https?:\/\/help-ads\.smartnews\.com\/hc\/[^\s]*/g, '[リンク削除]');
+}
+
+/**
  * Zendeskのチケットを検索する
  */
 export async function searchZendeskTickets(
@@ -74,7 +85,7 @@ export async function searchZendeskTickets(
     return data.results.map((ticket) => ({
       id: ticket.id,
       subject: ticket.subject || '(件名なし)',
-      description: ticket.description || '',
+      description: removeOldZendeskUrls(ticket.description || ''),
       status: translateStatus(ticket.status),
       createdAt: formatDate(ticket.created_at),
       url: `https://${ZENDESK_SUBDOMAIN}.zendesk.com/agent/tickets/${ticket.id}`,
